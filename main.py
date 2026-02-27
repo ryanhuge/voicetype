@@ -236,6 +236,10 @@ class VoiceType:
         logger.info("  LLM:    %s / %s", cfg.get("llmProvider"), cfg.get("llmModel"))
         logger.info("=" * 55)
 
+        # 同步開機啟動設定
+        from config.settings_server import sync_autostart
+        sync_autostart(cfg.get("autoStart", True))
+
         # 檢查 API Key
         self._check_api_keys(cfg)
 

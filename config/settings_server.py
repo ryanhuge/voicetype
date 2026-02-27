@@ -6,8 +6,11 @@
 
 import json
 import logging
+import os
+import sys
 import threading
 import webbrowser
+import winreg
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse
@@ -16,6 +19,34 @@ logger = logging.getLogger("VoiceType.SettingsServer")
 
 _server_thread = None
 _server_instance = None
+
+# ── Windows 開機啟動 ─────────────────────────────────────────────────────────
+
+_REG_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
+_REG_NAME = "VoiceType"
+
+
+def sync_autostart(enable: bool):
+    """同步 Windows 登錄檔的開機啟動項"""
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _REG_PATH, 0,
+                             winreg.KEY_SET_VALUE | winreg.KEY_QUERY_VALUE)
+        if enable:
+            if getattr(sys, 'frozen', False):
+                exe_path = f'"{sys.executable}"'
+            else:
+                exe_path = f'"{sys.executable}" "{os.path.abspath(sys.argv[0])}"'
+            winreg.SetValueEx(key, _REG_NAME, 0, winreg.REG_SZ, exe_path)
+            logger.info("Autostart enabled: %s", exe_path)
+        else:
+            try:
+                winreg.DeleteValue(key, _REG_NAME)
+                logger.info("Autostart disabled")
+            except FileNotFoundError:
+                pass
+        winreg.CloseKey(key)
+    except Exception as e:
+        logger.error("Failed to update autostart registry: %s", e)
 
 
 class SettingsAPIHandler(SimpleHTTPRequestHandler):
@@ -51,6 +82,9 @@ class SettingsAPIHandler(SimpleHTTPRequestHandler):
             try:
                 new_config = json.loads(body.decode("utf-8"))
                 self.settings.update_all(new_config)
+                # 同步開機啟動登錄檔
+                if "autoStart" in new_config:
+                    sync_autostart(new_config["autoStart"])
                 self._send_json({"status": "ok", "message": "設定已儲存"})
                 logger.info("設定已透過 Web UI 更新")
             except Exception as e:

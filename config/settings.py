@@ -31,6 +31,7 @@ DEFAULT_CONFIG = {
     "hotkey": "RightAlt",
     "language": "auto",
     "outputMode": "clipboard",
+    "autoStart": True,
     "removeFiller": True,
     "autoFormat": True,
     "contextAware": True,
