@@ -88,6 +88,14 @@ class VoiceType:
         self.is_recording = False
         self.processing = True
         play_stop()
+
+        # 立即按 Escape 取消瀏覽器的 Alt 選單激活（suppress=False 時 Alt 會穿透）
+        try:
+            import pyautogui
+            pyautogui.press("escape")
+        except Exception:
+            pass
+
         audio_data = self.recorder.stop()
         logger.info("Recording stopped (%.1f sec), processing...", len(audio_data) / 16000)
         self._update_tray("處理中...", "processing")
