@@ -28,8 +28,21 @@ class SpeechToText:
         language = cfg.get("language", "auto")
         dictionary = cfg.get("dictionary", [])
 
-        # 組合自訂詞彙作為 Whisper prompt
-        whisper_prompt = "、".join(dictionary) if dictionary else None
+        # 組合自訂詞彙作為 Whisper prompt（Groq 限制 896 bytes）
+        whisper_prompt = None
+        if dictionary:
+            # 用逗號分隔（1 byte）而非「、」（3 bytes）節省空間
+            parts = []
+            current_bytes = 0
+            for word in dictionary:
+                word_bytes = len(word.encode("utf-8"))
+                sep_bytes = 1 if parts else 0  # 逗號 1 byte
+                if current_bytes + sep_bytes + word_bytes > 890:
+                    logger.warning("Dictionary prompt truncated at %d bytes (limit 896)", current_bytes)
+                    break
+                parts.append(word)
+                current_bytes += sep_bytes + word_bytes
+            whisper_prompt = ",".join(parts) if parts else None
 
         if provider == "groq":
             return self._transcribe_groq(audio, model, language, whisper_prompt)

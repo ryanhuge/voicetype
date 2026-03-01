@@ -47,10 +47,9 @@ class HotkeyManager:
         key_name = HOTKEY_MAP.get(hotkey_id, "right alt")
         self._hotkey_name = key_name
 
-        # 註冊按下和釋放事件，suppress=True 阻止快捷鍵穿透到目標應用
-        # （避免 Right Alt 觸發 Chrome 選單列導致游標跳掉）
-        self._press_hook = keyboard.on_press_key(key_name, self._handle_press, suppress=True)
-        self._release_hook = keyboard.on_release_key(key_name, self._handle_release, suppress=True)
+        # 註冊按下和釋放事件，不使用 suppress 避免鍵盤鎖死
+        self._press_hook = keyboard.on_press_key(key_name, self._handle_press, suppress=False)
+        self._release_hook = keyboard.on_release_key(key_name, self._handle_release, suppress=False)
 
         logger.info("Hotkey registered: %s -> %s", hotkey_id, key_name)
 

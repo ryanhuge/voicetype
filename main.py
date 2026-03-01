@@ -13,6 +13,16 @@ import ctypes
 # 避免 PortAudio 將 COM 初始化為 MTA，導致 SendInput 無法被 Chrome 接收
 ctypes.windll.ole32.CoInitializeEx(None, 2)  # COINIT_APARTMENTTHREADED
 
+# ── 單實例鎖 ─────────────────────────────────────────────────────────────────
+# 使用 Windows Named Mutex 確保只有一個 VoiceType 在執行
+_mutex = ctypes.windll.kernel32.CreateMutexW(None, True, "Global\\VoiceType_SingleInstance")
+if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+    ctypes.windll.user32.MessageBoxW(
+        None, "VoiceType 已在執行中。\n請檢查系統托盤。", "VoiceType", 0x40
+    )
+    raise SystemExit(0)
+
+import atexit
 import threading
 import os
 import sys
@@ -146,6 +156,16 @@ class VoiceType:
             time.sleep(ERROR_DISPLAY_SECONDS)
 
         finally:
+            # 確保快捷鍵一定會重新註冊，否則 VoiceType 會停止回應
+            if not self.hotkey._press_hook:
+                try:
+                    self.hotkey.register(
+                        on_press=self.on_hotkey_press,
+                        on_release=self.on_hotkey_release,
+                    )
+                    logger.info("Hotkey re-registered after error recovery")
+                except Exception as e2:
+                    logger.error("Failed to re-register hotkey: %s", e2)
             self._reset_status()
 
     # ── 輔助方法 ─────────────────────────────────────────────────────────────
@@ -225,6 +245,16 @@ class VoiceType:
 
     # ── 啟動 ─────────────────────────────────────────────────────────────────
 
+    def _cleanup(self):
+        """確保程式退出時釋放所有鍵盤 hook，防止鍵盤卡住"""
+        try:
+            self.hotkey.stop()
+            import keyboard
+            keyboard.unhook_all()
+            logger.info("Keyboard hooks cleaned up")
+        except Exception:
+            pass
+
     def run(self):
         cfg = self.settings.load()
         hotkey = cfg.get("hotkey", "RightAlt")
@@ -235,6 +265,9 @@ class VoiceType:
         logger.info("  STT:    %s / %s", cfg.get("sttProvider"), cfg.get("sttModel"))
         logger.info("  LLM:    %s / %s", cfg.get("llmProvider"), cfg.get("llmModel"))
         logger.info("=" * 55)
+
+        # 註冊 atexit 確保任何情況退出都會釋放鍵盤 hook
+        atexit.register(self._cleanup)
 
         # 同步開機啟動設定
         from config.settings_server import sync_autostart

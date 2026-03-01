@@ -340,10 +340,31 @@
       <h2>自訂詞彙表</h2>
       <p class="desc">添加專有名詞、品牌名和技術術語，提升辨識準確度</p>
 
+      <div id="dict-capacity" style="margin-bottom:12px;padding:10px 14px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:12px;color:var(--muted)">容量使用</span>
+          <span id="dict-bytes" style="font-size:12px;color:var(--muted)">0 / 890 bytes</span>
+        </div>
+        <div style="height:4px;border-radius:2px;background:rgba(255,255,255,0.06);overflow:hidden">
+          <div id="dict-bar" style="height:100%;border-radius:2px;background:var(--accent);transition:width 0.3s;width:0%"></div>
+        </div>
+      </div>
+
       <div class="dict-input">
         <input type="text" id="new-word" placeholder="輸入詞彙，按 Enter 添加...">
         <button class="btn-primary" style="padding:0 18px;font-size:13px" onclick="addWord()">+ 添加</button>
+        <button class="btn-secondary" style="padding:0 14px;font-size:13px" onclick="toggleBatchImport()">批次匯入</button>
       </div>
+
+      <div id="batch-import" style="display:none;margin-bottom:16px">
+        <textarea id="batch-words" rows="6" style="width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:10px;font-size:13px;resize:vertical;font-family:inherit" placeholder="一行一個詞彙，例如：&#10;GitHub&#10;JavaScript&#10;Python&#10;API"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <button class="btn-primary" style="padding:6px 16px;font-size:13px" onclick="batchImport()">匯入</button>
+          <button class="btn-secondary" style="padding:6px 16px;font-size:13px" onclick="batchExport()">匯出目前詞彙</button>
+          <span id="batch-msg" style="font-size:12px;color:var(--muted)"></span>
+        </div>
+      </div>
+
       <div class="dict-list" id="dict-list"></div>
 
       <div>
@@ -536,6 +557,15 @@ function renderFeatures() {
 function renderDictionary() {
   const list = document.getElementById("dict-list");
   const dict = config.dictionary || [];
+
+  // 容量條
+  const usedBytes = getDictBytes(dict);
+  const pct = Math.min(100, usedBytes / DICT_BYTE_LIMIT * 100);
+  document.getElementById("dict-bytes").textContent = `${usedBytes} / ${DICT_BYTE_LIMIT} bytes（${dict.length} 個詞彙）`;
+  const bar = document.getElementById("dict-bar");
+  bar.style.width = pct + "%";
+  bar.style.background = pct > 90 ? "#ef4444" : pct > 70 ? "#f59e0b" : "var(--accent)";
+
   if (dict.length === 0) {
     list.innerHTML = '<div class="empty">尚未添加任何詞彙</div>';
   } else {
@@ -566,29 +596,80 @@ function toggleVis(id) {
   input.type = input.type === "password" ? "text" : "password";
 }
 
+function getDictBytes(dict) {
+  if (!dict || dict.length === 0) return 0;
+  return dict.reduce((sum, w, i) => sum + (i > 0 ? 1 : 0) + new Blob([w]).size, 0);
+}
+
+const DICT_BYTE_LIMIT = 890;
+
 function addWord() {
   const input = document.getElementById("new-word");
   const w = input.value.trim();
-  if (w && !(config.dictionary || []).includes(w)) {
-    if (!config.dictionary) config.dictionary = [];
-    config.dictionary.push(w);
-    input.value = "";
-    render();
+  if (!w) { input.focus(); return; }
+  if (!config.dictionary) config.dictionary = [];
+  if (config.dictionary.includes(w)) { input.focus(); return; }
+  const newBytes = getDictBytes(config.dictionary) + 1 + new Blob([w]).size;
+  if (newBytes > DICT_BYTE_LIMIT) {
+    alert("已達容量上限（890 bytes），請先移除部分詞彙再添加。");
+    input.focus();
+    return;
   }
+  config.dictionary.push(w);
+  input.value = "";
+  render();
   input.focus();
 }
 
 function addWordDirect(w) {
   if (!config.dictionary) config.dictionary = [];
-  if (!config.dictionary.includes(w)) {
-    config.dictionary.push(w);
-    render();
+  if (config.dictionary.includes(w)) return;
+  const newBytes = getDictBytes(config.dictionary) + 1 + new Blob([w]).size;
+  if (newBytes > DICT_BYTE_LIMIT) {
+    alert("已達容量上限（890 bytes），請先移除部分詞彙再添加。");
+    return;
   }
+  config.dictionary.push(w);
+  render();
 }
 
 function removeWord(w) {
   config.dictionary = (config.dictionary || []).filter(x => x !== w);
   render();
+}
+
+function toggleBatchImport() {
+  const el = document.getElementById("batch-import");
+  el.style.display = el.style.display === "none" ? "block" : "none";
+}
+
+function batchImport() {
+  const text = document.getElementById("batch-words").value;
+  const words = text.split(/[\n,，;；|]+/).map(w => w.trim()).filter(w => w.length > 0);
+  if (!config.dictionary) config.dictionary = [];
+  let added = 0, skipped = 0;
+  for (const w of words) {
+    if (config.dictionary.includes(w)) continue;
+    const newBytes = getDictBytes(config.dictionary) + 1 + new Blob([w]).size;
+    if (newBytes > DICT_BYTE_LIMIT) { skipped = words.length - added; break; }
+    config.dictionary.push(w);
+    added++;
+  }
+  document.getElementById("batch-words").value = "";
+  let msg = "";
+  if (added > 0) msg += `已匯入 ${added} 個詞彙`;
+  if (skipped > 0) msg += (msg ? "，" : "") + `${skipped} 個因容量已滿而跳過`;
+  if (!msg) msg = "沒有新詞彙（全部已存在）";
+  document.getElementById("batch-msg").textContent = msg;
+  setTimeout(() => { document.getElementById("batch-msg").textContent = ""; }, 5000);
+  if (added > 0) render();
+}
+
+function batchExport() {
+  const dict = config.dictionary || [];
+  document.getElementById("batch-words").value = dict.join("\n");
+  document.getElementById("batch-msg").textContent = `已匯出 ${dict.length} 個詞彙`;
+  setTimeout(() => { document.getElementById("batch-msg").textContent = ""; }, 3000);
 }
 
 // Enter to add word

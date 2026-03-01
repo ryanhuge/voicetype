@@ -43,8 +43,16 @@ class LLMProcessor:
             return raw_text.strip()
 
     def _get_system_prompt(self, cfg: dict) -> str:
-        """取得系統提示詞（含語境資訊）"""
+        """取得系統提示詞（含語境資訊與自訂字典）"""
         base_prompt = cfg.get("systemPrompt", DEFAULT_SYSTEM_PROMPT)
+
+        # 自訂字典：讓 LLM 知道這些專有名詞的正確寫法
+        dictionary = cfg.get("dictionary", [])
+        if dictionary:
+            words = "、".join(dictionary)
+            base_prompt += (
+                f"\n\n自訂字典（請確保這些詞彙使用正確的拼寫和大小寫）：\n{words}"
+            )
 
         # 語境適應：偵測當前 App
         if cfg.get("contextAware", True):
