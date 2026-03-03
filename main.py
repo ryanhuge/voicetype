@@ -209,10 +209,12 @@ class VoiceType:
                 # 將當前執行緒附加到目標視窗的執行緒
                 user32.AttachThreadInput(current_thread, target_thread, True)
 
-            # 方法 2：先顯示視窗（如果被最小化）
+            # 方法 2：先顯示視窗（只在被最小化時才還原，避免影響最大化視窗）
+            SW_MINIMIZE = 6
             SW_RESTORE = 9
-            user32.ShowWindow(hwnd, SW_RESTORE)
-            time.sleep(0.02)
+            if user32.IsIconic(hwnd):  # 只有在視窗被最小化時才還原
+                user32.ShowWindow(hwnd, SW_RESTORE)
+                time.sleep(0.02)
 
             # 方法 3：將視窗帶到最上層
             HWND_TOP = 0
