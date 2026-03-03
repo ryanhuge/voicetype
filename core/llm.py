@@ -109,7 +109,7 @@ class LLMProcessor:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": raw_text},
             ],
-            temperature=0.3,  # 低溫度：忠於原意
+            temperature=0.1,  # 極低溫度：嚴格遵守指令
             max_tokens=2048,
         )
 
@@ -161,7 +161,7 @@ class LLMProcessor:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": raw_text},
             ],
-            temperature=0.3,
+            temperature=0.1,  # 極低溫度：嚴格遵守指令
             max_tokens=2048,
         )
 
@@ -185,7 +185,7 @@ class LLMProcessor:
                     {"role": "user", "content": raw_text},
                 ],
                 "stream": False,
-                "options": {"temperature": 0.3},
+                "options": {"temperature": 0.1},  # 極低溫度：嚴格遵守指令
             },
             timeout=30,
         )

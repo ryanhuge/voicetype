@@ -238,7 +238,12 @@ class VoiceType:
     def _update_tray(self, status_text: str, state: str = "idle"):
         """更新系統列圖標外觀與提示文字"""
         if self.tray_icon:
-            self.tray_icon.title = f"VoiceType - {status_text}"
+            # 在就緒狀態顯示當前模型
+            if status_text == "就緒" and state == "idle":
+                model = self._get_current_model()
+                self.tray_icon.title = f"VoiceType - {status_text} ({model})"
+            else:
+                self.tray_icon.title = f"VoiceType - {status_text}"
             try:
                 self.tray_icon.icon = create_tray_icon(state)
             except Exception:
@@ -365,8 +370,38 @@ class VoiceType:
 
             img = create_tray_icon("idle")
 
+            # 建立模型選擇子選單
+            model_menu = pystray.Menu(
+                pystray.MenuItem(
+                    "gpt-4.1 (推薦)",
+                    lambda icon, item: self._switch_model("gpt-4.1"),
+                    checked=lambda item: self._get_current_model() == "gpt-4.1",
+                    radio=True,
+                ),
+                pystray.MenuItem(
+                    "gpt-4.1-mini",
+                    lambda icon, item: self._switch_model("gpt-4.1-mini"),
+                    checked=lambda item: self._get_current_model() == "gpt-4.1-mini",
+                    radio=True,
+                ),
+                pystray.MenuItem(
+                    "gpt-4o",
+                    lambda icon, item: self._switch_model("gpt-4o"),
+                    checked=lambda item: self._get_current_model() == "gpt-4o",
+                    radio=True,
+                ),
+                pystray.MenuItem(
+                    "gpt-4o-mini",
+                    lambda icon, item: self._switch_model("gpt-4o-mini"),
+                    checked=lambda item: self._get_current_model() == "gpt-4o-mini",
+                    radio=True,
+                ),
+            )
+
             menu = pystray.Menu(
                 pystray.MenuItem("VoiceType v0.1.0", None, enabled=False),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem("模型選擇", model_menu),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("開啟設定", self._open_settings),
                 pystray.MenuItem("設定檔位置", self._open_config_dir),
@@ -410,6 +445,27 @@ class VoiceType:
             on_release=self.on_hotkey_release,
         )
         logger.info("Settings reloaded")
+
+    def _get_current_model(self):
+        """取得當前使用的模型"""
+        cfg = self.settings.get_config()
+        return cfg.get("llmModel", "gpt-4.1")
+
+    def _switch_model(self, model_name: str):
+        """切換 LLM 模型"""
+        try:
+            logger.info("Switching model to: %s", model_name)
+            self.settings.update("llmModel", model_name)
+            # 重新建立 LLM 處理器
+            self.llm = LLMProcessor(self.settings)
+            # 更新托盤提示文字
+            if self.tray_icon:
+                cfg = self.settings.get_config()
+                tooltip = f"VoiceType - 就緒 ({model_name})"
+                self.tray_icon.title = tooltip
+            logger.info("Model switched to: %s", model_name)
+        except Exception as e:
+            logger.error("Failed to switch model: %s", e)
 
     def _quit(self, icon=None, item=None):
         logger.info("Shutting down VoiceType...")
