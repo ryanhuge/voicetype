@@ -10,7 +10,6 @@ import os
 import sys
 import threading
 import webbrowser
-import winreg
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse
@@ -20,33 +19,80 @@ logger = logging.getLogger("VoiceType.SettingsServer")
 _server_thread = None
 _server_instance = None
 
-# ── Windows 開機啟動 ─────────────────────────────────────────────────────────
-
-_REG_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
-_REG_NAME = "VoiceType"
+# ── 開機啟動管理 ─────────────────────────────────────────────────────────────
 
 
 def sync_autostart(enable: bool):
-    """同步 Windows 登錄檔的開機啟動項"""
+    """依平台同步開機啟動設定"""
+    if sys.platform == "win32":
+        _sync_autostart_windows(enable)
+    else:
+        _sync_autostart_linux(enable)
+
+
+def _sync_autostart_windows(enable: bool):
+    """Windows：透過登錄檔管理開機啟動"""
+    import winreg
+
+    reg_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    reg_name = "VoiceType"
+
     try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _REG_PATH, 0,
-                             winreg.KEY_SET_VALUE | winreg.KEY_QUERY_VALUE)
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, reg_path, 0,
+            winreg.KEY_SET_VALUE | winreg.KEY_QUERY_VALUE,
+        )
         if enable:
-            if getattr(sys, 'frozen', False):
+            if getattr(sys, "frozen", False):
                 exe_path = f'"{sys.executable}"'
             else:
                 exe_path = f'"{sys.executable}" "{os.path.abspath(sys.argv[0])}"'
-            winreg.SetValueEx(key, _REG_NAME, 0, winreg.REG_SZ, exe_path)
+            winreg.SetValueEx(key, reg_name, 0, winreg.REG_SZ, exe_path)
             logger.info("Autostart enabled: %s", exe_path)
         else:
             try:
-                winreg.DeleteValue(key, _REG_NAME)
+                winreg.DeleteValue(key, reg_name)
                 logger.info("Autostart disabled")
             except FileNotFoundError:
                 pass
         winreg.CloseKey(key)
     except Exception as e:
         logger.error("Failed to update autostart registry: %s", e)
+
+
+def _sync_autostart_linux(enable: bool):
+    """Linux：透過 systemd user service 管理開機啟動（掛掉自動重啟）"""
+    import subprocess
+
+    service_name = "voicetype.service"
+
+    # 清理舊的 .desktop 自動啟動
+    old_desktop = Path.home() / ".config" / "autostart" / "voicetype.desktop"
+    if old_desktop.exists():
+        old_desktop.unlink()
+
+    try:
+        subprocess.run(
+            ["systemctl", "--user", "daemon-reload"],
+            capture_output=True, timeout=10,
+        )
+        if enable:
+            subprocess.run(
+                ["systemctl", "--user", "enable", service_name],
+                capture_output=True, timeout=10,
+            )
+            logger.info("Autostart enabled (systemd): %s", service_name)
+        else:
+            subprocess.run(
+                ["systemctl", "--user", "disable", service_name],
+                capture_output=True, timeout=10,
+            )
+            logger.info("Autostart disabled (systemd)")
+    except Exception as e:
+        logger.error("Failed to update systemd autostart: %s", e)
+
+
+# ── HTTP 設定伺服器 ──────────────────────────────────────────────────────────
 
 
 class SettingsAPIHandler(SimpleHTTPRequestHandler):
@@ -82,7 +128,7 @@ class SettingsAPIHandler(SimpleHTTPRequestHandler):
             try:
                 new_config = json.loads(body.decode("utf-8"))
                 self.settings.update_all(new_config)
-                # 同步開機啟動登錄檔
+                # 同步開機啟動設定
                 if "autoStart" in new_config:
                     sync_autostart(new_config["autoStart"])
                 self._send_json({"status": "ok", "message": "設定已儲存"})

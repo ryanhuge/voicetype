@@ -7,11 +7,12 @@ sounddevice>=0.4.6
 numpy>=1.24.0
 
 # ── 全域快捷鍵 ──
-keyboard>=0.13.5
+keyboard>=0.13.5; sys_platform == "win32"
+evdev>=1.6.0; sys_platform == "linux"
 
-# ── 文字注入 ──
-pyperclip>=1.8.2
-pyautogui>=0.9.54
+# ── 文字注入（Windows 限定，Linux 使用 xclip/xdotool）──
+pyperclip>=1.8.2; sys_platform == "win32"
+pyautogui>=0.9.54; sys_platform == "win32"
 
 # ── 系統托盤 ──
 pystray>=0.19.5
@@ -22,13 +23,12 @@ openai>=1.30.0          # OpenAI + Groq (相容介面)
 anthropic>=0.28.0       # Anthropic Claude
 requests>=2.31.0        # Ollama HTTP 呼叫
 
-# ── Windows 限定（偵測當前視窗）──
-# pywin32>=306           # 取消註解以啟用語境偵測功能
-                         # pip install pywin32 --break-system-packages
+# ── Linux 系統依賴（需透過 apt 安裝）──
+# sudo apt install xdotool xclip libportaudio2
+# sudo usermod -aG input $USER  # evdev 權限
 
 # ── 本地 Whisper（選用）──
 # faster-whisper>=1.0.0  # 取消註解以啟用本地語音辨識
-                         # 需要 CUDA 或 CPU 推理
 
-# ── 打包成 exe ──
-# pyinstaller>=6.0       # 取消註解以打包發佈
+# ── 打包（選用）──
+# pyinstaller>=6.0

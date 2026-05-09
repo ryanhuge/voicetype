@@ -4,7 +4,10 @@ LLM 智能修飾模組
 支援 OpenAI ChatGPT、Anthropic Claude、Groq、Ollama
 """
 
+import os
+import sys
 import logging
+import subprocess
 
 from config.settings import DEFAULT_SYSTEM_PROMPT
 
@@ -57,9 +60,21 @@ class LLMProcessor:
     def _detect_context(self) -> str:
         """偵測當前使用的 App 來調整語氣"""
         try:
-            import win32gui
-            hwnd = win32gui.GetForegroundWindow()
-            title = win32gui.GetWindowText(hwnd).lower()
+            if sys.platform == "win32":
+                import win32gui
+                hwnd = win32gui.GetForegroundWindow()
+                title = win32gui.GetWindowText(hwnd).lower()
+            else:
+                # Wayland 下無法可靠取得視窗標題
+                if os.environ.get("XDG_SESSION_TYPE") == "wayland":
+                    return ""
+                result = subprocess.run(
+                    ["xdotool", "getactivewindow", "getwindowname"],
+                    capture_output=True, text=True, timeout=2,
+                )
+                if result.returncode != 0:
+                    return ""
+                title = result.stdout.strip().lower()
 
             if any(k in title for k in ["outlook", "gmail", "mail", "thunderbird"]):
                 return "用戶正在撰寫郵件，語氣應正式專業"
@@ -92,9 +107,9 @@ class LLMProcessor:
             model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": raw_text},
+                {"role": "user", "content": f"[語音辨識原始輸出，請清理] {raw_text}"},
             ],
-            temperature=0.3,  # 低溫度：忠於原意
+            temperature=0.1,
             max_tokens=2048,
         )
 
@@ -118,7 +133,7 @@ class LLMProcessor:
             max_tokens=2048,
             system=system_prompt,
             messages=[
-                {"role": "user", "content": raw_text},
+                {"role": "user", "content": f"[語音辨識原始輸出，請清理] {raw_text}"},
             ],
         )
 
@@ -144,9 +159,9 @@ class LLMProcessor:
             model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": raw_text},
+                {"role": "user", "content": f"[語音辨識原始輸出，請清理] {raw_text}"},
             ],
-            temperature=0.3,
+            temperature=0.1,
             max_tokens=2048,
         )
 
