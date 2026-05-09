@@ -18,6 +18,7 @@ if sys.platform == "win32":
 
     HOTKEY_MAP = {
         "RightAlt": "right alt",
+        "LeftAlt": "left alt",
         "RightCtrl": "right ctrl",
         "F9": "f9",
         "CapsLock": "caps lock",
@@ -91,6 +92,7 @@ else:
 
     HOTKEY_MAP = {
         "RightAlt": ecodes.KEY_RIGHTALT,
+        "LeftAlt": ecodes.KEY_LEFTALT,
         "RightCtrl": ecodes.KEY_RIGHTCTRL,
         "F9": ecodes.KEY_F9,
         "CapsLock": ecodes.KEY_CAPSLOCK,
