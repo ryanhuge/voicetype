@@ -252,6 +252,8 @@ class VoiceType:
 
     def _reload_settings(self, icon=None, item=None):
         """重新載入設定"""
+        self.is_recording = False
+        self.processing = False
         self.settings.load()
         self.stt = SpeechToText(self.settings)
         self.llm = LLMProcessor(self.settings)

@@ -99,7 +99,7 @@ class LLMProcessor:
         if not api_key:
             raise ValueError("OpenAI API Key 未設定")
 
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(api_key=api_key, timeout=15.0)
         model = cfg.get("llmModel", "gpt-4o-mini")
         system_prompt = self._get_system_prompt(cfg)
 
@@ -124,7 +124,7 @@ class LLMProcessor:
         if not api_key:
             raise ValueError("Anthropic API Key 未設定")
 
-        client = anthropic.Anthropic(api_key=api_key)
+        client = anthropic.Anthropic(api_key=api_key, timeout=15.0)
         model = cfg.get("llmModel", "claude-haiku-4-5-20251001")
         system_prompt = self._get_system_prompt(cfg)
 
@@ -151,6 +151,7 @@ class LLMProcessor:
         client = OpenAI(
             api_key=api_key,
             base_url="https://api.groq.com/openai/v1",
+            timeout=15.0,
         )
         model = cfg.get("llmModel", "llama-3.3-70b-versatile")
         system_prompt = self._get_system_prompt(cfg)
