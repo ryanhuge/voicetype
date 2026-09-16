@@ -21,7 +21,8 @@ DEFAULT_CONFIG = {
     "sttProvider": "groq",
     "llmProvider": "openai",
     "sttModel": "whisper-large-v3-turbo",
-    "llmModel": "gpt-4o-mini",
+    "llmModel": "gpt-5.4-nano",
+    "llmReasoningEffort": "low",
     "apiKeys": {
         "groq": "",
         "openai": "",

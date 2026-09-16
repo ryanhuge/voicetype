@@ -409,9 +409,9 @@ const STT_PROVIDERS = [
 ];
 
 const LLM_PROVIDERS = [
-  { id: "openai", name: "OpenAI ChatGPT", desc: "智能修飾首選，穩定可靠", models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1-nano"] },
+  { id: "openai", name: "OpenAI ChatGPT", desc: "智能修飾首選，穩定可靠", models: ["gpt-5.4-nano", "gpt-4.1-mini", "gpt-5.4-mini", "gpt-5.6-luna", "gpt-5.4", "gpt-4.1", "gpt-5-nano", "gpt-4o-mini"] },
   { id: "anthropic", name: "Anthropic Claude", desc: "高品質文字處理", models: ["claude-haiku-4-5-20251001", "claude-sonnet-4-5-20250929"] },
-  { id: "groq", name: "Groq (開源模型)", desc: "極快推理", models: ["llama-3.3-70b-versatile", "gemma2-9b-it"] },
+  { id: "groq", name: "Groq (開源模型)", desc: "極快推理", models: ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "groq/compound-mini"] },
   { id: "ollama", name: "Ollama 本地", desc: "完全離線", models: ["qwen3:8b", "gemma3:4b", "llama3.2:3b"] },
 ];
 
@@ -444,7 +444,7 @@ async function init() {
     // 離線模式：使用預設值
     config = {
       sttProvider: "groq", llmProvider: "openai",
-      sttModel: "whisper-large-v3-turbo", llmModel: "gpt-4o-mini",
+      sttModel: "whisper-large-v3-turbo", llmModel: "gpt-5.4-nano",
       apiKeys: { groq: "", openai: "", anthropic: "", ollama: "http://localhost:11434" },
       hotkey: "RightAlt", language: "auto", outputMode: "clipboard",
       removeFiller: true, autoFormat: true, contextAware: true,

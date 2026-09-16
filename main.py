@@ -370,33 +370,17 @@ class VoiceType:
 
             img = create_tray_icon("idle")
 
-            # 建立模型選擇子選單
-            model_menu = pystray.Menu(
+            # 建立模型選擇子選單（順序即推薦順序，依實測結果排定）
+            tray_models = ["gpt-5.4-nano", "gpt-4.1-mini", "gpt-5.4-mini", "gpt-4.1"]
+            model_menu = pystray.Menu(*[
                 pystray.MenuItem(
-                    "gpt-4.1 (推薦)",
-                    lambda icon, item: self._switch_model("gpt-4.1"),
-                    checked=lambda item: self._get_current_model() == "gpt-4.1",
+                    f"{name} (推薦)" if i == 0 else name,
+                    lambda icon, item, m=name: self._switch_model(m),
+                    checked=lambda item, m=name: self._get_current_model() == m,
                     radio=True,
-                ),
-                pystray.MenuItem(
-                    "gpt-4.1-mini",
-                    lambda icon, item: self._switch_model("gpt-4.1-mini"),
-                    checked=lambda item: self._get_current_model() == "gpt-4.1-mini",
-                    radio=True,
-                ),
-                pystray.MenuItem(
-                    "gpt-4o",
-                    lambda icon, item: self._switch_model("gpt-4o"),
-                    checked=lambda item: self._get_current_model() == "gpt-4o",
-                    radio=True,
-                ),
-                pystray.MenuItem(
-                    "gpt-4o-mini",
-                    lambda icon, item: self._switch_model("gpt-4o-mini"),
-                    checked=lambda item: self._get_current_model() == "gpt-4o-mini",
-                    radio=True,
-                ),
-            )
+                )
+                for i, name in enumerate(tray_models)
+            ])
 
             menu = pystray.Menu(
                 pystray.MenuItem("VoiceType v0.1.0", None, enabled=False),
@@ -449,7 +433,7 @@ class VoiceType:
     def _get_current_model(self):
         """取得當前使用的模型"""
         cfg = self.settings.get_config()
-        return cfg.get("llmModel", "gpt-4.1")
+        return cfg.get("llmModel", "gpt-5.4-nano")
 
     def _switch_model(self, model_name: str):
         """切換 LLM 模型"""
