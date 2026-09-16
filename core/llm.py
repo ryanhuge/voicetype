@@ -90,6 +90,54 @@ class LLMProcessor:
             pass
         return ""
 
+    # ── OpenAI 相容介面的參數相容處理 ────────────────────────────────────────
+
+    # 每個 (模型, 推理強度) 第一次呼叫時協商出可用的參數組合，之後直接沿用；
+    # 否則不支援 reasoning_effort 的模型每次口述都要白花一趟往返。
+    _param_cache = {}
+
+    @classmethod
+    def _chat_with_fallback(cls, client, model, messages, effort):
+        """呼叫 OpenAI 相容的 chat completions，自動吸收各模型的參數差異。
+
+        gpt-5 以後的模型不接受 max_tokens，必須改用 max_completion_tokens；
+        而指定 reasoning_effort 時又不可同時送出 temperature。各家模型支援的
+        參數子集並不一致，被拒絕的參數會自動拿掉重送，避免換個模型就讓整個
+        語意修正失效。
+        """
+        from openai import BadRequestError
+
+        key = (model, effort)
+        if key in cls._param_cache:
+            send_reasoning, send_temperature, legacy_tokens = cls._param_cache[key]
+        else:
+            send_reasoning = bool(effort) and effort != "unspecified"
+            send_temperature = not send_reasoning
+            legacy_tokens = False
+
+        while True:
+            kwargs = {"model": model, "messages": messages}
+            kwargs["max_tokens" if legacy_tokens else "max_completion_tokens"] = 4096
+            if send_reasoning:
+                kwargs["reasoning_effort"] = effort
+            if send_temperature:
+                kwargs["temperature"] = 0.1
+
+            try:
+                response = client.chat.completions.create(**kwargs)
+                cls._param_cache[key] = (send_reasoning, send_temperature, legacy_tokens)
+                return response
+            except BadRequestError as exc:
+                detail = str(exc)
+                if "reasoning_effort" in detail and send_reasoning:
+                    send_reasoning, send_temperature = False, True
+                elif "temperature" in detail and send_temperature:
+                    send_temperature = False
+                elif "max_completion_tokens" in detail and not legacy_tokens:
+                    legacy_tokens = True
+                else:
+                    raise
+
     # ── OpenAI ChatGPT ───────────────────────────────────────────────────────
 
     def _polish_openai(self, raw_text: str, cfg: dict) -> str:
@@ -100,17 +148,18 @@ class LLMProcessor:
             raise ValueError("OpenAI API Key 未設定")
 
         client = OpenAI(api_key=api_key, timeout=15.0)
-        model = cfg.get("llmModel", "gpt-4o-mini")
+        model = cfg.get("llmModel", "gpt-5.4-nano")
+        effort = cfg.get("llmReasoningEffort", "low")
         system_prompt = self._get_system_prompt(cfg)
 
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
+        response = self._chat_with_fallback(
+            client,
+            model,
+            [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"[語音辨識原始輸出，請清理] {raw_text}"},
             ],
-            temperature=0.1,
-            max_tokens=2048,
+            effort,
         )
 
         return response.choices[0].message.content.strip()
@@ -153,17 +202,18 @@ class LLMProcessor:
             base_url="https://api.groq.com/openai/v1",
             timeout=15.0,
         )
-        model = cfg.get("llmModel", "llama-3.3-70b-versatile")
+        model = cfg.get("llmModel", "openai/gpt-oss-20b")
         system_prompt = self._get_system_prompt(cfg)
 
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
+        # Groq 端多數模型不吃 reasoning_effort，直接不送，免得每次呼叫都多一趟往返
+        response = self._chat_with_fallback(
+            client,
+            model,
+            [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"[語音辨識原始輸出，請清理] {raw_text}"},
             ],
-            temperature=0.1,
-            max_tokens=2048,
+            None,
         )
 
         return response.choices[0].message.content.strip()
