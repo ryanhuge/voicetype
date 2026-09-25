@@ -372,11 +372,20 @@ class VoiceType:
 
             # 建立模型選擇子選單（順序即推薦順序，依實測結果排定）
             tray_models = ["gpt-5.4-nano", "gpt-4.1-mini", "gpt-5.4-mini", "gpt-4.1"]
+
+            # pystray 以 co_argcount 檢查回呼參數數量，超過 2 個會直接 ValueError，
+            # 所以不能用 `lambda icon, item, m=name:` 綁定變數，改用工廠函式。
+            def make_switch(m):
+                return lambda icon, item: self._switch_model(m)
+
+            def make_checked(m):
+                return lambda item: self._get_current_model() == m
+
             model_menu = pystray.Menu(*[
                 pystray.MenuItem(
                     f"{name} (推薦)" if i == 0 else name,
-                    lambda icon, item, m=name: self._switch_model(m),
-                    checked=lambda item, m=name: self._get_current_model() == m,
+                    make_switch(name),
+                    checked=make_checked(name),
                     radio=True,
                 )
                 for i, name in enumerate(tray_models)
