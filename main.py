@@ -177,34 +177,19 @@ class VoiceType:
             llm_time = time.time() - t1
             logger.info("Polished (%.1fs): %s", llm_time, polished)
 
-            # ==========================================
-            # 關鍵修復：恢復焦點 BEFORE unhook
-            # ==========================================
+            # 步驟 3：還原原本的視窗，失敗時不要貼上。
+            if not self._target_hwnd or not self._restore_focus(self._target_hwnd):
+                raise RuntimeError("無法還原輸入焦點，已停止貼上以避免輸入到錯誤視窗")
 
-            # 步驟 3：恢復焦點（此時 hook 仍然活躍）
-            if self._target_hwnd:
-                focus_success = self._restore_focus(self._target_hwnd)
-                if not focus_success:
-                    logger.warning("Focus restoration failed, but continuing with injection")
-                time.sleep(0.05)  # 讓焦點穩定
-
-            # 步驟 4：發送 Escape 鍵（取消 Alt 選單，現在發送到正確視窗）
-            try:
-                import pyautogui
-                pyautogui.press("escape")
-                time.sleep(0.02)
-            except Exception as e:
-                logger.warning("Failed to send escape: %s", e)
-
-            # 步驟 5：暫時 unhook（僅在注入期間）
+            # 步驟 4：暫時 unhook（僅在注入期間）
             self.hotkey.unhook()
             hook_unhooked = True
             time.sleep(0.05)  # 短暫暫停
 
-            # 步驟 6：注入文字
+            # 步驟 5：注入文字
             self.injector.inject(polished)
 
-            # 步驟 7：立即重新註冊 hook
+            # 步驟 6：立即重新註冊 hook
             self.hotkey.register(
                 on_press=self.on_hotkey_press,
                 on_release=self.on_hotkey_release,
@@ -221,7 +206,7 @@ class VoiceType:
 
         finally:
             # 確保 hook 一定會重新註冊
-            if hook_unhooked or not self.hotkey._press_hook:
+            if hook_unhooked or not self.hotkey._hook:
                 try:
                     self.hotkey.register(
                         on_press=self.on_hotkey_press,

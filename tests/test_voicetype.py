@@ -267,14 +267,12 @@ class TestHotkeyManager(unittest.TestCase):
             mgr.register(mock_press, mock_release)
 
             # 確認有註冊
-            self.assertIsNotNone(mgr._press_hook)
-            self.assertIsNotNone(mgr._release_hook)
+            self.assertIsNotNone(mgr._hook)
             self.assertTrue(mgr._running)
 
             # unhook
             mgr.unhook()
-            self.assertIsNone(mgr._press_hook)
-            self.assertIsNone(mgr._release_hook)
+            self.assertIsNone(mgr._hook)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -293,39 +291,32 @@ class TestHotkeyManager(unittest.TestCase):
             mgr.stop()
 
             self.assertFalse(mgr._running)
-            self.assertIsNone(mgr._press_hook)
-            self.assertIsNone(mgr._release_hook)
+            self.assertIsNone(mgr._hook)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     @patch("core.hotkey.keyboard")
-    def test_suppress_is_false(self, mock_kb):
-        """確認 suppress=False 避免鍵盤鎖死"""
+    def test_voice_hotkey_is_suppressed(self, mock_kb):
+        """語音快捷鍵的按下及放開都應攔截，並依序交給背景執行。"""
         from core.hotkey import HotkeyManager
-        from config.settings import Settings
 
-        temp_dir = tempfile.mkdtemp()
+        mock_kb.KEY_DOWN = "down"
+        settings = MagicMock()
+        settings.get_config.return_value = {"hotkey": "RightAlt"}
+        mgr = HotkeyManager(settings)
+        press, release = MagicMock(), MagicMock()
         try:
-            settings = Settings(config_dir=temp_dir)
-            settings.load()
-            mgr = HotkeyManager(settings)
-            mgr.register(lambda: None, lambda: None)
-
-            # 檢查 on_press_key 和 on_release_key 被呼叫時 suppress=False
-            for call in mock_kb.on_press_key.call_args_list:
-                kwargs = call.kwargs if call.kwargs else {}
-                args = call.args if call.args else ()
-                # suppress 可能是 positional 或 keyword
-                if "suppress" in kwargs:
-                    self.assertFalse(kwargs["suppress"],
-                                    "suppress must be False to prevent keyboard lockup")
-            for call in mock_kb.on_release_key.call_args_list:
-                kwargs = call.kwargs if call.kwargs else {}
-                if "suppress" in kwargs:
-                    self.assertFalse(kwargs["suppress"],
-                                    "suppress must be False to prevent keyboard lockup")
+            mgr.register(press, release)
+            mock_kb.hook_key.assert_called_once_with(
+                "right alt", mgr._handle_event, suppress=True
+            )
+            for kind in ("down", "down", "up"):
+                self.assertFalse(mgr._handle_event(MagicMock(event_type=kind)))
+            mgr._worker.shutdown(wait=True)
+            press.assert_called_once_with()
+            release.assert_called_once_with()
         finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
+            mgr.stop()
 
 
 class TestSounds(unittest.TestCase):
@@ -454,8 +445,8 @@ class TestErrorRecovery(unittest.TestCase):
         with open(main_path, "r", encoding="utf-8") as f:
             content = f.read()
         # 確認 finally 區塊有重新註冊邏輯
-        self.assertIn("if not self.hotkey._press_hook:", content)
-        self.assertIn("Hotkey re-registered after error recovery", content)
+        self.assertIn("if hook_unhooked or not self.hotkey._hook:", content)
+        self.assertIn("Hotkey re-registered in finally block", content)
 
 
 class TestConfigIntegration(unittest.TestCase):

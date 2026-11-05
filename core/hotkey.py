@@ -3,6 +3,7 @@
 監聽 Push-to-Talk 快捷鍵（按住說話，放開處理）
 """
 
+from concurrent.futures import ThreadPoolExecutor
 import logging
 import keyboard
 
@@ -27,8 +28,9 @@ class HotkeyManager:
         self._on_release = None
         self._running = False
         self._hotkey_name = None
-        self._press_hook = None
-        self._release_hook = None
+        self._hook = None
+        self._pressed = False
+        self._worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="VoiceTypeHotkey")
 
     def register(self, on_press, on_release):
         """
@@ -38,6 +40,7 @@ class HotkeyManager:
             on_press: 按下時的回呼函式
             on_release: 釋放時的回呼函式
         """
+        self.unhook()
         self._on_press = on_press
         self._on_release = on_release
         self._running = True
@@ -47,42 +50,35 @@ class HotkeyManager:
         key_name = HOTKEY_MAP.get(hotkey_id, "right alt")
         self._hotkey_name = key_name
 
-        # 註冊按下和釋放事件，不使用 suppress 避免鍵盤鎖死
-        self._press_hook = keyboard.on_press_key(key_name, self._handle_press, suppress=False)
-        self._release_hook = keyboard.on_release_key(key_name, self._handle_release, suppress=False)
+        # 鍵盤回呼只攔截按鍵，錄音啟停在背景依序執行。
+        self._hook = keyboard.hook_key(key_name, self._handle_event, suppress=True)
 
         logger.info("Hotkey registered: %s -> %s", hotkey_id, key_name)
 
-    def _handle_press(self, event):
-        """處理按下事件"""
-        if self._running and self._on_press:
-            try:
-                self._on_press()
-            except Exception as e:
-                logger.error("Hotkey press callback error: %s", e)
+    def _handle_event(self, event):
+        if not self._running:
+            return True
 
-    def _handle_release(self, event):
-        """處理釋放事件"""
-        if self._running and self._on_release:
+        pressed = event.event_type == keyboard.KEY_DOWN
+        if pressed != self._pressed:
+            self._pressed = pressed
+            callback = self._on_press if pressed else self._on_release
+            self._worker.submit(self._dispatch, callback)
+        return False
+
+    def _dispatch(self, callback):
+        if self._running and callback:
             try:
-                self._on_release()
-            except Exception as e:
-                logger.error("Hotkey release callback error: %s", e)
+                callback()
+            except Exception:
+                logger.exception("Hotkey callback failed")
 
     def unhook(self):
-        """移除此管理器註冊的 hook（不影響其他程式的 hook）"""
-        if self._press_hook:
-            try:
-                keyboard.unhook(self._press_hook)
-            except Exception:
-                pass
-            self._press_hook = None
-        if self._release_hook:
-            try:
-                keyboard.unhook(self._release_hook)
-            except Exception:
-                pass
-            self._release_hook = None
+        """移除語音快捷鍵的監聽。"""
+        if self._hook:
+            keyboard.unhook(self._hook)
+            self._hook = None
+        self._pressed = False
 
     def stop(self):
         """停止快捷鍵監聽"""
